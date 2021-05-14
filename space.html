@@ -1,0 +1,626 @@
+<!DOCTYPE html>
+<html>
+    <head>
+    <meta charset="utf-8"/>
+    <title>Space Gravity</title>
+    <script type="text/javascript">
+    
+      var canvas = null;
+      var $_GET = {
+        num: 30,
+        fps: 60,
+        size: 10,
+        sun: 30,
+        gravity: 2,
+        velocity: 20,
+        dcolor: 20,
+        scolor: 10,
+        vcolor: "true",
+        disperse: "false",
+        blank: "true",
+        circle: "true",
+        clear: "true",
+        center: "true",
+        bounding: "true",
+        additive: "true"
+      };
+      
+      function init(){
+          parseGet();
+          updateControls();
+          canvas = new Canvas(document.getElementById('canvas'), new Color(50,50,50,1,0));
+          document.getElementById('canvas').addEventListener('click', showControls);
+          document.addEventListener('keyup', function(event) {
+            console.log(event.code);
+            if (event.code == "Space" || event.code == "Enter"){
+                goButtonClicked();
+            }
+            if (event.code == "KeyC"){
+                clearButtonClicked();
+            }
+          });
+          window.addEventListener('resize', windowSizeUpdateListener);
+          start();
+      }
+      
+      function start() {
+        parseGet();
+        if ($_GET["additive"] == "false"){
+            canvas.components = [];
+        }
+        canvas.createComponents($_GET["num"]);
+        canvas.start(); 
+      }
+      
+      function showControls(){
+        let visibility = document.getElementById('controls').style.visibility;
+        if (visibility == "hidden"){
+            document.getElementById('controls').style.visibility = "visible";
+        }
+        else{
+            document.getElementById('controls').style.visibility = "hidden";
+        }
+      }
+      
+      function windowSizeUpdateListener(){
+        canvas.refreshDimensions();
+        canvas.clear();
+      }
+      
+      function parseGet(){
+        if(document.location.toString().indexOf('?') !== -1) {
+            var query = document.location
+               .toString()
+               // get the query string
+               .replace(/^.*?\?/, '')
+               // and remove any existing hash string (thanks, @vrijdenker)
+               .replace(/#.*$/, '')
+               .split('&');
+
+            for(var i=0, l=query.length; i<l; i++) {
+               var aux = decodeURIComponent(query[i]).split('=');
+               $_GET[aux[0]] = aux[1];
+            }
+        }
+      }
+      
+      function updateControls(){
+        let g = $_GET;
+        for(var k in g){
+            let widget = document.getElementById(k);
+            if (widget.type == "checkbox"){
+                if (g[k] == "true"){
+                    widget.checked = true;
+                }
+                else{
+                    widget.checked = false;
+                }
+            }
+            else{
+                widget.value = g[k];
+            }
+        }
+      }
+      
+      function updateWindowUrl(){
+        let href = window.location.href;
+        if (href.includes("?")){
+            href = href.split("?")[0];
+        }
+        href = href + "?";
+        let g = $_GET;
+        for(var k in g){
+           let widget = document.getElementById(k);
+           if (widget.type == "checkbox"){
+               if (widget.checked == true){
+                   href = href + k + "=" + "true";
+               }
+               else{
+                   href = href + k + "=" + "false";
+               }
+           }
+           else{
+               href = href + k + "=" + widget.value.trim();
+           }
+           href = href + "&";
+        }
+        href = href.substring(0,href.length - 1);
+        window.history.replaceState(null, "", href);
+      }
+      
+      function goButtonClicked(){
+        updateWindowUrl();
+        start();
+      }
+      
+      function clearButtonClicked(){
+        if ($_GET["additive"] == "true"){
+            canvas.components = [];
+            canvas.count = 0;
+            canvas.updateCount(0);
+        }
+        canvas.clear();
+      }
+      
+      function getRandomInt(min, max){
+        return Math.floor(Math.random() * (max - min)) + min;
+      }
+      
+      function getRandomFloat(min, max){
+        return Math.random() * (max - min) + min;
+      }
+      
+      function getRandomDirection(){
+        let r = Math.random();
+        return r*(Math.PI*2);
+      }
+      
+      function getRandomSign(){
+        let r = Math.random();
+        if (r > 0.5){
+            return -1;
+        }
+        else{
+            return 1;
+        }
+      }
+      
+      function mod(n, m) {
+        return ((n % m) + m) % m;
+      }
+      
+      function radians_to_degrees(radians){
+        var pi = Math.PI;
+        return radians * (180/pi);
+      }
+      
+      function getRandomColor(){
+        let r = getRandomInt(0, 255);
+        let g = getRandomInt(0, 255);
+        let b = getRandomInt(0, 255);
+        return new Color(r,g,b,1,0);
+      }
+      
+      function clamp(num, min, max){
+        if (num > max){
+            num = max;
+        }
+        if (num < min){
+            num = min;
+        }
+        return num;
+      }
+      
+      function deriveColor(color, max){
+        r = clamp(color.r + (getRandomInt(0, max) * getRandomSign()), 0, 255);
+        g = clamp(color.g + (getRandomInt(0, max) * getRandomSign()), 0, 255);
+        b = clamp(color.b + (getRandomInt(0, max) * getRandomSign()), 0, 255);
+        return new Color(r,g,b,1,color.dc);
+      }
+      
+      function drawCircle(x,y,d,c){
+        canvas.context.beginPath();
+        canvas.context.arc(x, y, d, 0, 2 * Math.PI, false);
+        canvas.context.fillStyle = c.getStyle();
+        canvas.context.fill();
+      }
+      
+      function drawRectangle(x,y,d,c){
+        canvas.context.fillStyle = c.getStyle();
+        canvas.context.fillRect(x,y,d,d);
+      }
+      
+      class Color{
+        constructor(r,g,b,a,dc){
+            this.r = r;
+            this.g = g;
+            this.b = b;
+            this.a = a;
+            this.dc = dc;
+        }
+        
+        vshift(){
+            let or = this.r;
+            let og = this.g;
+            let ob = this.b;
+            this.r = clamp(this.r + this.dc, 0, 255);
+            this.g = clamp(this.g + this.dc, 0, 255);
+            this.b = clamp(this.b + this.dc, 0, 255);
+            let dc_max = 255;
+            let dc_min = 0;
+            if (this.r == dc_max || this.g == dc_max || this.b == dc_max || this.r == dc_min || this.g == dc_min || this.b == dc_min){
+                this.r = or;
+                this.g = og;
+                this.b = ob;
+            }
+        }
+        shift(){
+            let or = this.r;
+            let og = this.g;
+            let ob = this.b;
+            this.r = clamp(this.r + this.dc, 0, 255);
+            this.g = clamp(this.g + this.dc, 0, 255);
+            this.b = clamp(this.b + this.dc, 0, 255);
+            let dc_max = 255;
+            let dc_min = 0;
+            if (this.r == dc_max || this.g == dc_max || this.b == dc_max || this.r == dc_min || this.g == dc_min || this.b == dc_min){
+                this.r = or;
+                this.g = og;
+                this.b = ob;
+                this.dc = this.dc * -1;
+            }
+        }
+        
+        getStyle(){
+            return 'rgba(' + this.r + ',' + this.g + ',' + this.b + ',' + this.a + ')';
+        }
+      }
+      
+      class Canvas {
+        constructor(canvas, background){
+            this.canvas = canvas;
+            this.context = this.canvas.getContext('2d');
+            this.background = background;
+            this.components = [];
+            this.refreshDimensions();
+            this.count = 0;
+        }
+        
+        start(){
+            this.gravity = Number($_GET["gravity"]);
+            this.sun = {
+                x: this.getWidth()/2,
+                y: this.getHeight()/2,
+                diameter: Number($_GET["sun"]),
+                color: new Color(255,255,0,1),
+                outlineColor: new Color(150,150,0,1)
+            };
+            if ($_GET["clear"] == "true"){
+                this.clear();
+            }
+            let fps = 1000 / Number($_GET["fps"]);
+            this.sun.diameter = Number($_GET["sun"])
+            if ($_GET["center"] == "false"){
+                this.sun.x = getRandomInt(0, canvas.getWidth());
+                this.sun.y = getRandomInt(0, canvas.getHeight());
+            }
+            if (this.interval){
+                clearInterval(this.interval);
+            }
+            this.interval = setInterval(this.update.bind(this), fps);
+        }
+        
+        clear(){
+            this.context.fillStyle = this.background.getStyle();
+            this.context.fillRect(0, 0, this.getWidth(), this.getHeight());
+        }
+        
+        getHeight(){
+            return this.context.canvas.height;
+        }
+        
+        getWidth(){
+            return this.context.canvas.width;
+        }
+        
+        refreshDimensions(){
+            this.context.canvas.height = this.context.canvas.clientHeight;
+            this.context.canvas.width = this.context.canvas.clientWidth;
+            
+        }
+        
+        updateCount(diff){
+            this.count = Number(this.count) + Number(diff);
+            document.getElementById("count").innerHTML = "Count: " + this.count;
+        }
+        
+        createComponents(num){
+            let max_size = Number($_GET["size"]);
+            let dcolor = Number($_GET["dcolor"]);
+            var baseColor = getRandomColor();
+            
+            
+            let x = getRandomInt(0, canvas.getWidth());
+            let y = getRandomInt(0, canvas.getHeight());
+
+            for (let i = 0; i < num; i++) {
+                let diameter = getRandomInt(1, max_size);
+                let color = deriveColor(baseColor, getRandomInt(5, dcolor));
+                color.dc = Number($_GET["scolor"]);
+                let direction = getRandomDirection();
+                if ($_GET["disperse"] == "true"){
+                    x = getRandomInt(0, canvas.getWidth());
+                    y = getRandomInt(0, canvas.getHeight());
+                }
+                let velocity = getRandomFloat(Number(1),Number($_GET["velocity"]));
+                let c = new Component(i, diameter, color, direction, velocity, x, y);
+                let d_max = c.width;
+                //c.dx = getRandomFloat(0.1,d_max) * getRandomSign();
+                //c.dy = getRandomFloat(0.1,d_max) * getRandomSign();
+                this.components.push(c);
+            }
+            this.updateCount(num);
+        }
+      
+        update(){
+            if ($_GET["blank"] == "true"){
+                this.clear();
+            }
+            let outlineColor = deriveColor(this.sun.color, 0);
+            outlineColor.dc = -80;
+            outlineColor.shift();
+            if ($_GET["circle"] == "true"){
+                drawCircle(this.sun.x,this.sun.y,this.sun.diameter + 6,this.sun.outlineColor);
+                drawCircle(this.sun.x,this.sun.y,this.sun.diameter,this.sun.color);
+            }
+            else{
+                drawRectangle(this.sun.x - 3,this.sun.y - 3,this.sun.diameter + 6,this.sun.outlineColor);
+                drawRectangle(this.sun.x,this.sun.y,this.sun.diameter,this.sun.color);
+            }
+            for (let i = 0; i < this.components.length; i++) {
+                let c = this.components[i];
+                c.update(this);
+                
+            }
+        }
+      }
+      
+      class Component{
+        constructor(id, diameter, color, direction, velocity, x, y){
+            this.id = id;
+            this.diameter = diameter;
+            this.color = color;
+            this.direction = direction;
+            this.velocity = velocity;
+            this.start_velocity = velocity;
+            this.x = x;
+            this.y = y;
+            this.alive = true;
+        }
+        
+        update(canvas){
+            if (this.alive){
+                let cx = canvas.sun.x;
+                let cy = canvas.sun.y;
+                
+                let mass_c = canvas.sun.diameter**2;
+                let mass = this.diameter**2;
+
+                let dx = cx - this.x;
+                let dy = cy - this.y;
+
+                let distance = Math.sqrt((dy**2) + (dx**2));
+                let direction = Math.atan2(dy,dx);
+                direction = mod(direction, (2*Math.PI));
+                
+                let ddx = Math.cos(this.direction) * this.velocity;
+                let ddy = Math.sin(this.direction) * this.velocity;
+                
+                let force = (canvas.gravity * mass_c * mass) /(distance**2);
+                
+                let ddx2 = Math.cos(direction) * force;
+                let ddy2 = Math.sin(direction) * force;
+                
+                this.velocity = Math.sqrt(((ddy + ddy2)**2) + ((ddx + ddx2)**2));
+                this.direction = Math.atan2((ddy + ddy2),(ddx + ddx2));
+                this.direction = mod(this.direction, (2*Math.PI));
+                
+                let del_x = Math.cos(this.direction) * this.velocity;
+                let del_y = Math.sin(this.direction) * this.velocity;
+                this.x = this.x + del_x;
+                this.y = this.y + del_y;
+                
+                if($_GET["bounding"] == "true"){
+                    if (this.y > canvas.getHeight() - this.diameter){
+                        this.y = canvas.getHeight() - this.diameter;
+                        this.direction = (Math.PI*2) - this.direction;
+                        this.velocity = this.velocity/2;
+                    }
+                    if (this.x > canvas.getWidth() - this.diameter){
+                        this.x = canvas.getWidth() - this.diameter;
+                        this.direction = Math.PI - this.direction;
+                        this.velocity = this.velocity/2;
+                    }
+                    if (this.y < 0){
+                        this.y = 0;
+                        this.direction = (Math.PI*2) - this.direction;
+                        this.velocity = this.velocity/2;
+                    }
+                    if (this.x < 0){
+                        this.x = 0;
+                        this.direction = Math.PI - this.direction;
+                        this.velocity = this.velocity/2;
+                    }
+                }
+                
+                if ($_GET["circle"] == "true"){
+                    drawCircle(this.x,this.y,this.diameter,this.color);
+                }
+                else{
+                    drawRectangle(this.x,this.y,this.diameter,this.color);
+                }
+                if ($_GET["vcolor"] == "true"){
+                    if (this.velocity > (this.start_velocity)){
+                        this.color.dc = Math.abs(this.color.dc);
+                    }
+                    else{
+                        this.color.dc = Math.abs(this.color.dc) * -1;
+                    }
+                    this.color.vshift();
+                }
+                else{
+                    this.color.shift();
+                }
+                if (this.x > (canvas.getWidth() * 10) || this.y > (canvas.getHeight() * 10)){
+                    this.alive = false;
+                    canvas.updateCount(-1);
+                }
+            }
+        }
+      }
+    </script>
+    <style type="text/css">
+      canvas { 
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        margin: 0px;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        background: rgba(50,50,50,1);
+        font-family: monospace;
+        
+      }
+
+      body{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        margin: 0px;
+        padding: 0;
+      }
+      #controls{
+        color: white;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-around;
+        position: absolute;
+        top: 0px;
+        left: 0px;
+        width: 100vw;
+        background: rgba(10,10,10,0.5);
+        padding: 0px;
+        margin: 0px;
+      }
+      div.control_item{
+        background-color: rgba(50,50,50,1);
+        margin: 4px;
+        padding: 4px;
+        text-align: center;
+        display: inline;
+        vertical-align: middle;
+        border-radius: 8px;
+      }
+      button{
+        color: white;
+        font-size: 4em;
+        background-color: green;
+        border-radius: 8px;
+      }
+      input.large {
+        transform: scale(5);
+        margin: 30px;
+      }
+      input{
+        font-family: monospace;
+        font-size: 1.75em;
+      }
+      label{
+        font-family: monospace;
+        font-size: 1.75em;
+      }
+      @media screen and (min-width: 1025px) {
+        input{
+            font-size: 1em;
+        }
+        input.large {
+            transform: scale(1);
+            margin: 5px;
+        }
+        label{
+            font-size: 1em;
+        }
+        button{
+            font-size: 2em;
+        }
+      }
+    </style>
+  </head>
+  <body onload="init();">
+    <div id="controls" style="visibility:hidden">
+        <div class="control_item">
+            <label for="size">Size:</label>
+            <input type="text" id="size" name="size" size="3">
+        </div>
+        <div class="control_item">
+            <label for="sun">Sun Size:</label>
+            <input type="text" id="sun" name="sun" size="3">
+        </div>
+        <div class="control_item">
+            <label for="num">Number:</label>
+            <input type="text" id="num" name="num" size="5">
+        </div>
+        <div class="control_item">
+            <label for="gravity">Gravity:</label>
+            <input type="text" id="gravity" name="gravity" size="3">
+        </div>
+        <div class="control_item">
+            <label for="velocity">Velocity:</label>
+            <input type="text" id="velocity" name="velocity" size="3">
+        </div>
+        <div class="control_item">
+            <label for="num">FPS:</label>
+            <input type="text" id="fps" name="fps" size="3">
+        </div>
+        <div class="control_item">
+            <label for="num">Color Distance:</label>
+            <input type="text" id="dcolor" name="dcolor" size="3">
+        </div>
+        <div class="control_item">
+            <label for="num">Color Shift:</label>
+            <input type="text" id="scolor" name="scolor" size="3">
+        </div>
+        <div class="control_item">
+            <label for="blank">Blank:</label>
+            <input type="checkbox" class="large" id="blank" name="blank">
+        </div>
+        <div class="control_item">
+            <label for="disperse">Disperse:</label>
+            <input type="checkbox" class="large" id="disperse" name="disperse">
+        </div>
+        <div class="control_item">
+            <label for="circle">Circle:</label>
+            <input type="checkbox" class="large" id="circle" name="circle">
+        </div>
+        <div class="control_item">
+            <label for="clear">Clear:</label>
+            <input type="checkbox" class="large" id="clear" name="clear">
+        </div>
+        <div class="control_item">
+            <label for="center">Center:</label>
+            <input type="checkbox" class="large" id="center" name="center">
+        </div>
+        <div class="control_item">
+            <label for="vcolor">Velocity Color:</label>
+            <input type="checkbox" class="large" id="vcolor" name="vcolor">
+        </div>
+        <div class="control_item">
+            <label for="bounding">Bounding:</label>
+            <input type="checkbox" class="large" id="bounding" name="bounding">
+        </div>
+        <div class="control_item">
+            <label for="additive">Additive:</label>
+            <input type="checkbox" class="large" id="additive" name="additive">
+        </div>
+        <div class="control_item">
+            <label id="count"></label>
+        </div>
+        <div class="control_item">
+            <button id="clear" onclick="clearButtonClicked()">Clear</button>
+        </div>
+        <div class="control_item">
+            <button id="go" onclick="goButtonClicked()">Go</button>
+        </div>
+    </div>
+    <canvas id="canvas"></canvas>
+  </body>
+</html>
+

@@ -1,0 +1,478 @@
+<!DOCTYPE html>
+<html>
+    <head>
+    <meta charset="utf-8"/>
+    <title>Brownian Motion</title>
+    <script type="text/javascript">
+    
+      var canvas = null;
+      var $_GET = {
+        num: 1000,
+        fps: 24,
+        size: 8,
+        dcolor: 20,
+        scolor: 10,
+        wobble: 1,
+        disperse: "false",
+        blank: "false",
+        linear: "true",
+        center: "false",
+        circle: "true",
+        clear: "true"
+      };
+      
+      function init(){
+          parseGet();
+          updateControls();
+          canvas = new Canvas(document.getElementById('canvas'), new Color(50,50,50,1,0));
+          document.getElementById('canvas').addEventListener('click', showControls);
+          document.addEventListener('keyup', function(event) {
+            console.log(event.code);
+            if (event.code == "Space" || event.code == "Enter"){
+                goButtonClicked();
+            }
+          });
+          window.addEventListener('resize', windowSizeUpdateListener);
+          start();
+      }
+      
+      function start() {
+        parseGet();
+        canvas.components = [];
+        canvas.createComponents($_GET["num"]);
+        canvas.start(); 
+      }
+      
+      function showControls(){
+        let visibility = document.getElementById('controls').style.visibility;
+        if (visibility == "hidden"){
+            document.getElementById('controls').style.visibility = "visible";
+        }
+        else{
+            document.getElementById('controls').style.visibility = "hidden";
+        }
+      }
+      
+      function windowSizeUpdateListener(){
+        canvas.refreshDimensions();
+        canvas.clear();
+      }
+      
+      function parseGet(){
+        if(document.location.toString().indexOf('?') !== -1) {
+            var query = document.location
+               .toString()
+               // get the query string
+               .replace(/^.*?\?/, '')
+               // and remove any existing hash string (thanks, @vrijdenker)
+               .replace(/#.*$/, '')
+               .split('&');
+
+            for(var i=0, l=query.length; i<l; i++) {
+               var aux = decodeURIComponent(query[i]).split('=');
+               $_GET[aux[0]] = aux[1];
+            }
+        }
+      }
+      
+      function updateControls(){
+        let g = $_GET;
+        for(var k in g){
+            let widget = document.getElementById(k);
+            if (widget.type == "checkbox"){
+                if (g[k] == "true"){
+                    widget.checked = true;
+                }
+                else{
+                    widget.checked = false;
+                }
+            }
+            else{
+                widget.value = g[k];
+            }
+        }
+      }
+      
+      function updateWindowUrl(){
+        let href = window.location.href;
+        if (href.includes("?")){
+            href = href.split("?")[0];
+        }
+        href = href + "?";
+        let g = $_GET;
+        for(var k in g){
+           let widget = document.getElementById(k);
+           if (widget.type == "checkbox"){
+               if (widget.checked == true){
+                   href = href + k + "=" + "true";
+               }
+               else{
+                   href = href + k + "=" + "false";
+               }
+           }
+           else{
+               href = href + k + "=" + widget.value;
+           }
+           href = href + "&";
+        }
+        href = href.substring(0,href.length - 1);
+        window.history.replaceState(null, "", href);
+      }
+      
+      function goButtonClicked(){
+        updateWindowUrl();
+        start();
+      }
+      
+      function getRandomInt(min, max){
+        return Math.floor(Math.random() * (max - min)) + min;
+      }
+      
+      function getRandomFloat(min, max){
+        return Math.random() * (max - min) + min;
+      }
+      
+      function getRandomColor(){
+        let r = getRandomInt(0, 255);
+        let g = getRandomInt(0, 255);
+        let b = getRandomInt(0, 255);
+        return new Color(r,g,b,1,0);
+      }
+      
+      function clamp(num, min, max){
+        if (num > max){
+            num = max;
+        }
+        if (num < min){
+            num = min;
+        }
+        return num;
+      }
+      
+      function deriveColor(color, max){
+        r = clamp(color.r + (getRandomInt(0, max) * getRandomDirection()), 0, 255);
+        g = clamp(color.g + (getRandomInt(0, max) * getRandomDirection()), 0, 255);
+        b = clamp(color.b + (getRandomInt(0, max) * getRandomDirection()), 0, 255);
+        return new Color(r,g,b,1,color.dc);
+      }
+      
+      function getRandomDirection(){
+        let r = Math.random();
+        if (r > 0.5){
+            return -1;
+        }
+        else{
+            return 1;
+        }
+      }
+      
+      class Color{
+        constructor(r,g,b,a,dc){
+            this.r = r;
+            this.g = g;
+            this.b = b;
+            this.a = a;
+            this.dc = dc;
+        }
+        
+        shift(){
+            let or = this.r;
+            let og = this.g;
+            let ob = this.b;
+            this.r = clamp(this.r + this.dc, 0, 255);
+            this.g = clamp(this.g + this.dc, 0, 255);
+            this.b = clamp(this.b + this.dc, 0, 255);
+            let dc_max = 255;
+            let dc_min = 0;
+            if (this.r == dc_max || this.g == dc_max || this.b == dc_max || this.r == dc_min || this.g == dc_min || this.b == dc_min){
+                this.r = or;
+                this.g = og;
+                this.b = ob;
+                this.dc = this.dc * -1;
+            }
+        }
+        
+        getStyle(){
+            return 'rgba(' + this.r + ',' + this.g + ',' + this.b + ',' + this.a + ')';
+        }
+      }
+      
+      class Canvas {
+        constructor(canvas, background){
+            this.canvas = canvas;
+            this.context = this.canvas.getContext('2d');
+            this.background = background;
+            this.components = [];
+            this.refreshDimensions();
+        }
+        
+        start(){
+            if ($_GET["clear"] == "true"){
+                this.clear();
+            }
+            let fps = 1000 / Number($_GET["fps"]);
+            if (this.interval){
+                clearInterval(this.interval);
+            }
+            this.interval = setInterval(this.update.bind(this), fps);
+        }
+        
+        clear(){
+            this.context.fillStyle = this.background.getStyle();
+            this.context.fillRect(0, 0, this.getWidth(), this.getHeight());
+        }
+        
+        getHeight(){
+            return this.context.canvas.height;
+        }
+        
+        getWidth(){
+            return this.context.canvas.width;
+        }
+        
+        refreshDimensions(){
+            this.context.canvas.height = this.context.canvas.clientHeight;
+            this.context.canvas.width = this.context.canvas.clientWidth;
+            
+        }
+        
+        createComponents(num){
+            let max_size = Number($_GET["size"]);
+            let dcolor = Number($_GET["dcolor"]);
+            
+            var baseColor = getRandomColor();
+            
+            let x = this.getWidth() / 2;
+            let y = this.getHeight() / 2;
+            if ($_GET["center"] == "false"){
+                x = getRandomInt(0, canvas.getWidth());
+                y = getRandomInt(0, canvas.getHeight());
+            }    
+            for (let i = 0; i < num; i++) {
+                let size = getRandomInt(1, max_size);
+                let color = deriveColor(baseColor, getRandomInt(5, dcolor));
+                
+                if ($_GET["disperse"] == "true"){
+                    x = getRandomInt(0, canvas.getWidth());
+                    y = getRandomInt(0, canvas.getHeight());
+                }
+                let scolor = Number($_GET["scolor"]);
+                color.dc = scolor;
+                let c = new Component(i, size, size, color, x, y);
+                let d_max = c.width;
+                c.dx = getRandomFloat(0.1,d_max) * getRandomDirection();
+                c.dy = getRandomFloat(0.1,d_max) * getRandomDirection();
+                this.components.push(c);
+            }
+        }
+      
+        update(){
+            if ($_GET["blank"] == "true"){
+                this.clear();
+            }
+            for (let i = 0; i < this.components.length; i++) {
+                let c = this.components[i];
+                c.update(this);
+                
+            }
+        }
+      }
+      
+      class Component{
+        constructor(id, width,height,color,x,y){
+            this.width = width;
+            this.height = height;
+            this.color = color;
+            this.x = x;
+            this.y = y;
+            this.dx = 0;
+            this.dy = 0;
+            this.id = id;
+        }
+        
+        update(canvas){
+            if ($_GET["linear"] != "true" || (this.dx == 0 && this.dy == 0)){
+                this.dx = getRandomInt(1,this.width) * getRandomDirection();
+                this.dy = getRandomInt(1,this.height) * getRandomDirection();
+            }
+            this.x = this.x + this.dx;
+            this.y = this.y + this.dy;
+            
+            if (this.y > canvas.getHeight() - this.height){
+                this.y = canvas.getHeight() - this.height;
+                this.dy = this.dy * -1;
+            }
+            if (this.x > canvas.getWidth() - this.width){
+                this.x = canvas.getWidth() - this.width;
+                this.dx = this.dx * -1;
+            }
+            if (this.y < 0){
+                this.y = 0;
+                this.dy = this.dy * -1;
+            }
+            if (this.x < 0){
+                this.x = 0;
+                this.dx = this.dx * -1;
+            }
+            
+            let wobble = Number($_GET["wobble"]);
+            this.dx = clamp(this.dx + (getRandomFloat(0,wobble) * getRandomDirection()), this.width * -1, this.width);
+            this.dy = clamp(this.dy + (getRandomFloat(0,wobble) * getRandomDirection()), this.height * -1, this.height);
+            
+            if ($_GET["circle"] == "true"){
+                canvas.context.beginPath();
+                canvas.context.arc(this.x, this.y, this.width, 0, 2 * Math.PI, false);
+                canvas.context.fillStyle = this.color.getStyle();
+                canvas.context.fill();
+            }
+            else{
+                canvas.context.fillStyle = this.color.getStyle();
+                canvas.context.fillRect(this.x, this.y, this.width, this.height);
+            }
+            this.color.shift();
+        }
+      }
+    </script>
+    <style type="text/css">
+      canvas { 
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+      }
+      html {
+        margin: 0px;
+        padding: 0;
+        height: 100%;
+        width: 100%;
+        background: rgba(50,50,50,1);
+        font-family: monospace;
+        
+      }
+
+      body{
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        height: 100%;
+        margin: 0px;
+        padding: 0;
+      }
+      #controls{
+        color: white;
+        display: flex;
+        flex-direction: row;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-around;
+        position: absolute;
+        top: 0px;
+        left: 0px;
+        width: 100vw;
+        background: rgba(10,10,10,0.5);
+        padding: 0px;
+        margin: 0px;
+      }
+      div.control_item{
+        background-color: rgba(50,50,50,1);
+        margin: 4px;
+        padding: 4px;
+        text-align: center;
+        display: inline;
+        vertical-align: middle;
+        border-radius: 8px;
+      }
+      #go{
+        color: white;
+        font-size: 4em;
+        background-color: green;
+        border-radius: 8px;
+      }
+      input.large {
+        transform: scale(5);
+        margin: 30px;
+      }
+      input{
+        font-family: monospace;
+        font-size: 1.75em;
+      }
+      label{
+        font-family: monospace;
+        font-size: 1.75em;
+      }
+      @media screen and (min-width: 1025px) {
+        input{
+            font-size: 1em;
+        }
+        input.large {
+            transform: scale(1);
+            margin: 5px;
+        }
+        label{
+            font-size: 1em;
+        }
+        #go{
+            font-size: 2em;
+        }
+      }
+    </style>
+  </head>
+  <body onload="init();">
+    <div id="controls" style="visibility:hidden">
+        <div class="control_item">
+            <label for="size">Size:</label>
+            <input type="text" id="size" name="size" size="3">
+        </div>
+        <div class="control_item">
+            <label for="num">Number:</label>
+            <input type="text" id="num" name="num" size="5">
+        </div>
+        <div class="control_item">
+            <label for="num">FPS:</label>
+            <input type="text" id="fps" name="fps" size="3">
+        </div>
+        <div class="control_item">
+            <label for="num">Color Distance:</label>
+            <input type="text" id="dcolor" name="dcolor" size="3">
+        </div>
+        <div class="control_item">
+            <label for="num">Color Shift:</label>
+            <input type="text" id="scolor" name="scolor" size="3">
+        </div>
+        <div class="control_item">
+            <label for="num">Wobble:</label>
+            <input type="text" id="wobble" name="wobble" size="3">
+        </div>
+        <div class="control_item">
+            <label for="blank">Blank:</label>
+            <input type="checkbox" class="large" id="blank" name="blank">
+        </div>
+        <div class="control_item">
+            <label for="disperse">Disperse:</label>
+            <input type="checkbox" class="large" id="disperse" name="disperse">
+        </div>
+        <div class="control_item">
+            <label for="linear">Linear:</label>
+            <input type="checkbox" class="large" id="linear" name="linear">
+        </div>
+        <div class="control_item">
+            <label for="center">Center:</label>
+            <input type="checkbox" class="large" id="center" name="center">
+        </div>
+        <div class="control_item">
+            <label for="circle">Circle:</label>
+            <input type="checkbox" class="large" id="circle" name="circle">
+        </div>
+        <div class="control_item">
+            <label for="clear">Clear:</label>
+            <input type="checkbox" class="large" id="clear" name="clear">
+        </div>
+        <div class="control_item">
+            <button id="go" onclick="goButtonClicked()">Go</button>
+        </div>
+    </div>
+    <canvas id="canvas"></canvas>
+  </body>
+</html>
+

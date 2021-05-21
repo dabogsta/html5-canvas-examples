@@ -1,1 +1,1 @@
-# HTML 5 canvas examples using particles and basic gravity simulation. 
+# HTML 5 canvas examples using particles and basic gravity simulation. :)

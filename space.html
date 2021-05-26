@@ -21,8 +21,9 @@
         circle: "true",
         clear: "true",
         center: "true",
-        bounding: "true",
-        additive: "true"
+        bounding: "false",
+        additive: "true",
+        consumes: "true"
       };
       
       function init(){
@@ -47,6 +48,7 @@
         parseGet();
         if ($_GET["additive"] == "false"){
             canvas.components = [];
+            canvas.count = 0;
         }
         canvas.createComponents($_GET["num"]);
         canvas.start(); 
@@ -140,6 +142,7 @@
             canvas.updateCount(0);
         }
         canvas.clear();
+        canvas.createSun();
       }
       
       function getRandomInt(min, max){
@@ -264,10 +267,25 @@
             this.components = [];
             this.refreshDimensions();
             this.count = 0;
+            this.sun = null;
         }
         
         start(){
             this.gravity = Number($_GET["gravity"]);
+            if (this.sun == null){
+                this.createSun();
+            }
+            if ($_GET["clear"] == "true"){
+                this.clear();
+            }
+            let fps = 1000 / Number($_GET["fps"]);
+            if (this.interval){
+                clearInterval(this.interval);
+            }
+            this.interval = setInterval(this.update.bind(this), fps);
+        }
+        
+        createSun(){
             this.sun = {
                 x: this.getWidth()/2,
                 y: this.getHeight()/2,
@@ -275,19 +293,10 @@
                 color: new Color(255,255,0,1),
                 outlineColor: new Color(150,150,0,1)
             };
-            if ($_GET["clear"] == "true"){
-                this.clear();
-            }
-            let fps = 1000 / Number($_GET["fps"]);
-            this.sun.diameter = Number($_GET["sun"])
             if ($_GET["center"] == "false"){
                 this.sun.x = getRandomInt(0, canvas.getWidth());
                 this.sun.y = getRandomInt(0, canvas.getHeight());
             }
-            if (this.interval){
-                clearInterval(this.interval);
-            }
-            this.interval = setInterval(this.update.bind(this), fps);
         }
         
         clear(){
@@ -312,6 +321,15 @@
         updateCount(diff){
             this.count = Number(this.count) + Number(diff);
             document.getElementById("count").innerHTML = "Count: " + this.count;
+        }
+        
+        addComponent(x,y,diameter, color, velocity, explosion){
+            let direction = getRandomDirection();
+            let i = this.components.length;
+            let c = new Component(i, diameter, color, direction, velocity, x, y);
+            c.explosion = explosion;
+            this.components.push(c);
+            this.updateCount(1);
         }
         
         createComponents(num){
@@ -376,6 +394,7 @@
             this.x = x;
             this.y = y;
             this.alive = true;
+            this.explosion = false;
         }
         
         update(canvas){
@@ -451,9 +470,27 @@
                 else{
                     this.color.shift();
                 }
-                if (this.x > (canvas.getWidth() * 10) || this.y > (canvas.getHeight() * 10)){
+                if (this.x > (canvas.getWidth() * 10) || this.x < (canvas.getWidth() * -10) || this.y > (canvas.getHeight() * 10) || this.y < (canvas.getHeight() * -10)){
                     this.alive = false;
+                    //console.log("Killed: " + this.id + " (Orbit Exceeded Distance Limit!)");
                     canvas.updateCount(-1);
+                }
+                if ((this.x <= (canvas.sun.x + (canvas.sun.diameter/2)) && this.x >= (canvas.sun.x - (canvas.sun.diameter/2))) && (this.y <= (canvas.sun.y + (canvas.sun.diameter/2)) && this.y >= (canvas.sun.y - (canvas.sun.diameter/2)))){
+                    this.alive = false;
+                    //console.log("Killed: " + this.id + " (Impacted Sun!)");
+                    canvas.updateCount(-1);
+                    if ($_GET["consumes"] == "true"){
+                        canvas.sun.diameter = canvas.sun.diameter+1;
+                    }
+                    
+                    //$_GET["sun"] = canvas.sun.diameter+0.1;
+                    /*
+                    if (this.explosion == false){
+                        for (let i = 0; i < 10; i++) {
+                            canvas.addComponent(this.x,this.y,this.diameter/2,new Color(255,0,0,1,0), this.velocity, true)
+                        }
+                    }
+                    */
                 }
             }
         }
@@ -605,6 +642,10 @@
         <div class="control_item">
             <label for="bounding">Bounding:</label>
             <input type="checkbox" class="large" id="bounding" name="bounding">
+        </div>
+        <div class="control_item">
+            <label for="consumes">Sun Consumes:</label>
+            <input type="checkbox" class="large" id="consumes" name="consumes">
         </div>
         <div class="control_item">
             <label for="additive">Additive:</label>

@@ -7,15 +7,16 @@
     
       var canvas = null;
       var $_GET = {
-        num: 30,
+        num: 100,
         fps: 60,
         size: 10,
         sun: 30,
-        gravity: 2,
-        velocity: 20,
+        gravity: 1,
+        velocity: 25,
+        m_velocity: 999,
         dcolor: 20,
-        scolor: 10,
-        vcolor: "true",
+        scolor: 1,
+        vcolor: "false",
         disperse: "false",
         blank: "true",
         circle: "true",
@@ -23,7 +24,8 @@
         center: "true",
         bounding: "false",
         additive: "true",
-        consumes: "true"
+        consumes: "true",
+        p_gravity: "false"
       };
       
       function init(){
@@ -136,6 +138,8 @@
       }
       
       function clearButtonClicked(){
+        updateWindowUrl();
+        parseGet();
         if ($_GET["additive"] == "true"){
             canvas.components = [];
             canvas.count = 0;
@@ -210,7 +214,7 @@
       
       function drawRectangle(x,y,d,c){
         canvas.context.fillStyle = c.getStyle();
-        canvas.context.fillRect(x,y,d,d);
+        canvas.context.fillRect(x-(d/2),y-(d/2),d,d);
       }
       
       class Color{
@@ -257,6 +261,54 @@
         getStyle(){
             return 'rgba(' + this.r + ',' + this.g + ',' + this.b + ',' + this.a + ')';
         }
+      }
+      
+      function calculateCollision(self, other){
+        if ((self.x <= (other.x + (other.diameter/2)) && self.x >= (other.x - (other.diameter/2))) && (self.y <= (other.y + (other.diameter/2)) && self.y >= (other.y - (other.diameter/2)))){
+            self.alive = false;
+            //console.log("Killed: " + this.id + " (Impacted Sun!)");
+            canvas.updateCount(-1);
+            if ($_GET["consumes"] == "true"){
+                other.diameter = Math.sqrt(self.diameter**2 + other.diameter**2);
+            }
+        }
+      }
+      
+      function calculateGravity(self, other){
+        let max_v = Number($_GET["m_velocity"]);
+        let cx = other.x;
+        let cy = other.y;
+        
+        let mass_c = other.diameter**2;
+        let mass = self.diameter**2;
+
+        let dx = cx - self.x;
+        let dy = cy - self.y;
+
+        let distance = Math.sqrt((dy**2) + (dx**2));
+        let direction = Math.atan2(dy,dx);
+        direction = mod(direction, (2*Math.PI));
+        
+        let ddx = Math.cos(self.direction) * self.velocity;
+        let ddy = Math.sin(self.direction) * self.velocity;
+        
+        let force = (canvas.gravity * mass_c * mass) /(distance**2);
+        
+        let ddx2 = Math.cos(direction) * force;
+        let ddy2 = Math.sin(direction) * force;
+        
+        self.velocity = Math.sqrt(((ddy + ddy2)**2) + ((ddx + ddx2)**2));
+        if (self.velocity > max_v){
+            self.velocity = max_v;
+        }
+        self.direction = Math.atan2((ddy + ddy2),(ddx + ddx2));
+        self.direction = mod(self.direction, (2*Math.PI));
+        
+        let del_x = Math.cos(self.direction) * self.velocity;
+        let del_y = Math.sin(self.direction) * self.velocity;
+        self.x = self.x + del_x;
+        self.y = self.y + del_y;
+      
       }
       
       class Canvas {
@@ -368,17 +420,21 @@
             outlineColor.dc = -80;
             outlineColor.shift();
             if ($_GET["circle"] == "true"){
-                drawCircle(this.sun.x,this.sun.y,this.sun.diameter + 6,this.sun.outlineColor);
+                drawCircle(this.sun.x,this.sun.y,this.sun.diameter + (2/30 * this.sun.diameter),this.sun.outlineColor);
                 drawCircle(this.sun.x,this.sun.y,this.sun.diameter,this.sun.color);
             }
             else{
-                drawRectangle(this.sun.x - 3,this.sun.y - 3,this.sun.diameter + 6,this.sun.outlineColor);
+                drawRectangle(this.sun.x,this.sun.y,this.sun.diameter + (2/30 * this.sun.diameter),this.sun.outlineColor);
                 drawRectangle(this.sun.x,this.sun.y,this.sun.diameter,this.sun.color);
             }
             for (let i = 0; i < this.components.length; i++) {
                 let c = this.components[i];
                 c.update(this);
                 
+            }
+            if(this.count == 0){
+                this.createSun();
+                start();
             }
         }
       }
@@ -399,56 +455,51 @@
         
         update(canvas){
             if (this.alive){
-                let cx = canvas.sun.x;
-                let cy = canvas.sun.y;
-                
-                let mass_c = canvas.sun.diameter**2;
-                let mass = this.diameter**2;
-
-                let dx = cx - this.x;
-                let dy = cy - this.y;
-
-                let distance = Math.sqrt((dy**2) + (dx**2));
-                let direction = Math.atan2(dy,dx);
-                direction = mod(direction, (2*Math.PI));
-                
-                let ddx = Math.cos(this.direction) * this.velocity;
-                let ddy = Math.sin(this.direction) * this.velocity;
-                
-                let force = (canvas.gravity * mass_c * mass) /(distance**2);
-                
-                let ddx2 = Math.cos(direction) * force;
-                let ddy2 = Math.sin(direction) * force;
-                
-                this.velocity = Math.sqrt(((ddy + ddy2)**2) + ((ddx + ddx2)**2));
-                this.direction = Math.atan2((ddy + ddy2),(ddx + ddx2));
-                this.direction = mod(this.direction, (2*Math.PI));
-                
-                let del_x = Math.cos(this.direction) * this.velocity;
-                let del_y = Math.sin(this.direction) * this.velocity;
-                this.x = this.x + del_x;
-                this.y = this.y + del_y;
+                if (this.x > (canvas.getWidth() * 10) || this.x < (canvas.getWidth() * -10) || this.y > (canvas.getHeight() * 10) || this.y < (canvas.getHeight() * -10)){
+                    this.alive = false;
+                    //console.log("Killed: " + this.id + " (Orbit Exceeded Distance Limit!)");
+                    canvas.updateCount(-1);
+                }
+                calculateCollision(this, canvas.sun);
+                if(this.alive == true){
+                    calculateGravity(this, canvas.sun);
+                }
+                if ($_GET["p_gravity"] == "true"){
+                    for (let i = 0; i < canvas.components.length; i++) {
+                        if (!this.alive){
+                            break;
+                        }
+                        let other = canvas.components[i];
+                        if (other.alive == true && other.id != this.id && this.diameter <= other.diameter){
+                            calculateCollision(this, other)
+                            if(this.alive == true){
+                                calculateGravity(this, other);
+                            }
+                        }
+                    }
+                }
                 
                 if($_GET["bounding"] == "true"){
+                    let friction = 0.9;
                     if (this.y > canvas.getHeight() - this.diameter){
                         this.y = canvas.getHeight() - this.diameter;
                         this.direction = (Math.PI*2) - this.direction;
-                        this.velocity = this.velocity/2;
+                        this.velocity = this.velocity * friction;
                     }
                     if (this.x > canvas.getWidth() - this.diameter){
                         this.x = canvas.getWidth() - this.diameter;
                         this.direction = Math.PI - this.direction;
-                        this.velocity = this.velocity/2;
+                        this.velocity = this.velocity * friction;
                     }
-                    if (this.y < 0){
-                        this.y = 0;
+                    if (this.y < this.diameter){
+                        this.y = this.diameter;
                         this.direction = (Math.PI*2) - this.direction;
-                        this.velocity = this.velocity/2;
+                        this.velocity = this.velocity * friction;
                     }
-                    if (this.x < 0){
-                        this.x = 0;
+                    if (this.x < this.diameter){
+                        this.x = this.diameter;
                         this.direction = Math.PI - this.direction;
-                        this.velocity = this.velocity/2;
+                        this.velocity = this.velocity * friction;
                     }
                 }
                 
@@ -469,28 +520,6 @@
                 }
                 else{
                     this.color.shift();
-                }
-                if (this.x > (canvas.getWidth() * 10) || this.x < (canvas.getWidth() * -10) || this.y > (canvas.getHeight() * 10) || this.y < (canvas.getHeight() * -10)){
-                    this.alive = false;
-                    //console.log("Killed: " + this.id + " (Orbit Exceeded Distance Limit!)");
-                    canvas.updateCount(-1);
-                }
-                if ((this.x <= (canvas.sun.x + (canvas.sun.diameter/2)) && this.x >= (canvas.sun.x - (canvas.sun.diameter/2))) && (this.y <= (canvas.sun.y + (canvas.sun.diameter/2)) && this.y >= (canvas.sun.y - (canvas.sun.diameter/2)))){
-                    this.alive = false;
-                    //console.log("Killed: " + this.id + " (Impacted Sun!)");
-                    canvas.updateCount(-1);
-                    if ($_GET["consumes"] == "true"){
-                        canvas.sun.diameter = canvas.sun.diameter+1;
-                    }
-                    
-                    //$_GET["sun"] = canvas.sun.diameter+0.1;
-                    /*
-                    if (this.explosion == false){
-                        for (let i = 0; i < 10; i++) {
-                            canvas.addComponent(this.x,this.y,this.diameter/2,new Color(255,0,0,1,0), this.velocity, true)
-                        }
-                    }
-                    */
                 }
             }
         }
@@ -604,6 +633,10 @@
             <input type="text" id="velocity" name="velocity" size="3">
         </div>
         <div class="control_item">
+            <label for="m_velocity">Max Velocity:</label>
+            <input type="text" id="m_velocity" name="m_velocity" size="3">
+        </div>
+        <div class="control_item">
             <label for="num">FPS:</label>
             <input type="text" id="fps" name="fps" size="3">
         </div>
@@ -648,6 +681,10 @@
             <input type="checkbox" class="large" id="consumes" name="consumes">
         </div>
         <div class="control_item">
+            <label for="p_gravity">Planet Gravity:</label>
+            <input type="checkbox" class="large" id="p_gravity" name="p_gravity">
+        </div>
+        <div class="control_item">
             <label for="additive">Additive:</label>
             <input type="checkbox" class="large" id="additive" name="additive">
         </div>
@@ -655,7 +692,7 @@
             <label id="count"></label>
         </div>
         <div class="control_item">
-            <button id="clear" onclick="clearButtonClicked()">Clear</button>
+            <button id="clear" onclick="clearButtonClicked()">Reset</button>
         </div>
         <div class="control_item">
             <button id="go" onclick="goButtonClicked()">Go</button>

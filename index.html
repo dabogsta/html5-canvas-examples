@@ -176,12 +176,18 @@
         }
         
         shift(){
+            let or = this.r;
+            let og = this.g;
+            let ob = this.b;
             this.r = clamp(this.r + this.dc, 0, 255);
             this.g = clamp(this.g + this.dc, 0, 255);
             this.b = clamp(this.b + this.dc, 0, 255);
             let dc_max = 255;
             let dc_min = 0;
             if (this.r == dc_max || this.g == dc_max || this.b == dc_max || this.r == dc_min || this.g == dc_min || this.b == dc_min){
+                this.r = or;
+                this.g = og;
+                this.b = ob;
                 this.dc = this.dc * -1;
             }
         }
